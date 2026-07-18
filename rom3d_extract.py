@@ -36,7 +36,7 @@ with open("results.csv", "w", newline="") as csv_file:
         match filetype:
             case 0 | 2 | 3 | 4 | 5:
                 # Generic file (at least for now)
-                filename = str(block_ptr)+".bin"
+                filename = str(block_ptr)+f".{filetype}.bin"
                 with open(subdir+filename, "wb") as outfile:
                     outfile.write(block)
                 other_files += 1
