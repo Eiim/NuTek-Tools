@@ -28,6 +28,7 @@ var1s, block_ptrs, full_types, var4s = zip(*iter_unpack("<LLLL", file_entries))
 midi_files = 0
 bmd_files = 0
 type_4_files = 0
+sbnk_swar_files = 0
 other_files = 0
 for i in range(file_count):
     full_type = full_types[i]
@@ -40,7 +41,7 @@ for i in range(file_count):
     filetype_metadata = None
     
     match filetype:
-        case 0 | 2 | 3 | 5:
+        case 0 | 2 | 3:
             # Generic file (at least for now)
             filename = str(block_ptr)+f".{filetype}.bin"
             with open(subdir+filename, "wb") as outfile:
@@ -91,6 +92,97 @@ for i in range(file_count):
                 "records": records
             }
             type_4_files += 1
+        case 5:
+            # SBNK + SWAR + extra header metadata
+            #print(str(block_ptr)+".bin (index "+str(i)+")")
+            filename = str(block_ptr)
+            filenames = []
+            delta = var4s[i] // 2
+            metadata_size = (next_ptr - block_ptr) - delta
+            offs = 0
+            meta_list_count = unpack_from("<L", block, offs)[0]
+            offs += 4
+            unk_list_1 = []
+            for j in range(meta_list_count):
+                var = unpack_from("<L", block, offs)[0]
+                unk_list_1.append(var)
+                offs += 4
+            #print("unk_list_1:"+str(unk_list_1))
+            unk_list_2 = []
+            for j in range(meta_list_count):
+                var1 = unpack_from("<L", block, offs)[0]
+                var2 = unpack_from("<L", block, offs+4)[0]
+                unk_list_2.append({
+                    "var1": var1,
+                    "var2": var2})
+                offs += 8
+            #print("unk_list_2:"+str(unk_list_2))
+            if ((block_ptr+offs) % 32 != 0):
+                offs += 32 - ((block_ptr+offs) % 32) # align to 32-byte boundary
+            #print(f"offs={offs}")
+            #print("lz_archive_length_or_whatever = "+str(unpack_from("<L", block, offs)[0]))
+            is_lz_compressed = False
+            if (offs + 4 == metadata_size):
+                # then it's probably lz compressed?
+                is_lz_compressed = True
+                offs += 4 # lz archive length or whatever
+            #print(f"is_lz_compressed = {is_lz_compressed}")
+            arc_file_bytes = []
+            if (is_lz_compressed):
+                #print("writing \""+subdir+filename+".bin.lz\"")
+                filenames.append(filename+".bin.lz")
+                with open(subdir+filename+".bin.lz", "wb") as outfile:
+                    outfile.write(block[offs:])
+                arc_file_bytes = decompress(block[offs:])
+            else:
+                arc_file_bytes = block[offs:]
+            #print("writing \""+subdir+filename+".bin\"")
+            filenames.append(filename+".bin")
+            with open(subdir+filename+".bin", "wb") as outfile:
+                outfile.write(arc_file_bytes)
+            # now parse the metadata and extract the sound files within this archive/container
+            offs = 0
+            sound_file_count = unpack_from("<L", arc_file_bytes, offs)[0]
+            #print(f"sound_file_count = {sound_file_count}")
+            offs += 4
+            sound_file_ptrs = []
+            for j in range(sound_file_count):
+                ptr = unpack_from("<L", arc_file_bytes, offs)[0]
+                sound_file_ptrs.append(ptr)
+                offs += 4
+            #print("sound_file_ptrs = "+str(sound_file_ptrs))
+            for j in range(sound_file_count):
+                sf_ptr = sound_file_ptrs[j]
+                next_sf_ptr = sound_file_ptrs[j+1] if j+1 < sound_file_count else len(arc_file_bytes)
+                sf_siz = next_sf_ptr - sf_ptr
+                # i've only ever seen this be "SBNK" and "SWAR"
+                sf_magic = unpack_from("4s", arc_file_bytes, sf_ptr)[0]
+                sf_magic_str = sf_magic.decode('ascii', errors='ignore')
+                #sf_ext = sanitize_filename(sf_magic_str, replacement_text="_")
+                #if ((sf_ext == "_") or (sf_ext == "____")): # i forget which
+                #    sf_ext = "bin"
+                #else:
+                #    sf_ext = sf_ext.lower()
+                sf_ext = ""
+                known_sf_ext = {
+                    "SWAR": "swar",
+                    "SBNK": "sbnk",
+                }
+                sf_ext = known_sf_ext.get(sf_magic_str, "bin")
+                sf_filename = filename+f"_file_{j}."+sf_ext
+                #print("writing \""+subdir+sf_filename+"\"")
+                filenames.append(sf_filename)
+                with open(subdir+sf_filename, "wb") as outfile:
+                    outfile.write(arc_file_bytes[sf_ptr:next_sf_ptr])
+            filetype_metadata = {
+                "filenames": filenames,
+                "unk_list_1": unk_list_1,
+                "unk_list_2": unk_list_2,
+                "is_lz_compressed": is_lz_compressed,
+                "sound_file_count": sound_file_count,
+                "sound_file_ptrs": sound_file_ptrs,
+            }
+            sbnk_swar_files += 1
         case 6:
             # MIDI file
             output_bytes = decompress(block[4:])
@@ -123,4 +215,4 @@ for i in range(file_count):
 with open("rom3d_metadata.json", "w", encoding="utf-8") as file:
     json.dump(files_metadata, file, ensure_ascii=False, indent="\t")
 
-print(f"Extracted {bmd_files} BMD files, {midi_files} MIDI files, {type_4_files} Type 4 files, and {other_files} other files.")
+print(f"Extracted {bmd_files} BMD files, {midi_files} MIDI files, {type_4_files} Type 4 files, {sbnk_swar_files} sound archive files, and {other_files} other files.")
