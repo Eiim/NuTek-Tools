@@ -41,7 +41,7 @@ for i in range(file_count):
     filetype_metadata = None
     
     match filetype:
-        case 0 | 2 | 3:
+        case 0 | 3:
             # Generic file (at least for now)
             filename = str(block_ptr)+f".{filetype}.bin"
             with open(subdir+filename, "wb") as outfile:
@@ -65,6 +65,29 @@ for i in range(file_count):
                 "order": order
             }
             bmd_files += 1
+        case 2:
+            # UNK_02 file (aka "type2" file)
+            index = 0
+            meta_list_count = unpack_from("<L", block, index)[0]
+            index += 4
+            hashes = [x[0] for x in iter_unpack("<L", block[index:index+4*meta_list_count])]
+            index += 4 * meta_list_count
+            order = [x for x in block[index:index+meta_list_count]]
+            index += meta_list_count
+            index += (4 - meta_list_count%4 if meta_list_count%4 != 0 else 0) # pad to 4-byte alignment
+            index += 4 # Decompressed size, ignore
+            #filename = str(block_ptr)+f".{filetype}.bin.lz"
+            #with open(subdir+filename, "wb") as outfile:
+            #    outfile.write(block[index:])
+            output_bytes = decompress(block[index:])
+            filename = str(block_ptr)+f".{filetype}.bin"
+            with open(subdir+filename, "wb") as outfile:
+                outfile.write(output_bytes)
+            filetype_metadata = {
+                "hashes": [hex(h) for h in hashes],
+                "order": order
+            }
+            other_files += 1
         case 4:
             # Level info file
             record_count = unpack_from("<L", block, 0)[0]
