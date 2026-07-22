@@ -27,6 +27,7 @@ files_metadata = []
 var1s, block_ptrs, full_types, var4s = zip(*iter_unpack("<LLLL", file_entries))
 midi_files = 0
 bmd_files = 0
+cmd_files = 0
 type_4_files = 0
 sbnk_swar_files = 0
 other_files = 0
@@ -79,15 +80,20 @@ for i in range(file_count):
             #filename = str(block_ptr)+f".{filetype}.bin.lz"
             #with open(subdir+filename, "wb") as outfile:
             #    outfile.write(block[index:])
-            output_bytes = decompress(block[index:])
-            filename = str(block_ptr)+f".{filetype}.bin"
-            with open(subdir+filename, "wb") as outfile:
-                outfile.write(output_bytes)
+            cmd_container = decompress(block[index:])
+            cmd_count = unpack_from("<L", cmd_container, 0)[0]
+            offsets = [x[0] for x in iter_unpack("<L", cmd_container[4:4+4*cmd_count])]
+            offsets.append(len(cmd_container))
+            for cmdi in range(cmd_count):
+                output_bytes = cmd_container[offsets[cmdi]:offsets[cmdi+1]]
+                filename = f"{block_ptr}-{cmdi}.cmd"
+                with open(subdir+filename, "wb") as outfile:
+                    outfile.write(output_bytes)
+                cmd_files += 1
             filetype_metadata = {
                 "hashes": [hex(h) for h in hashes],
                 "order": order
             }
-            other_files += 1
         case 4:
             # Level info file
             record_count = unpack_from("<L", block, 0)[0]
@@ -238,4 +244,4 @@ for i in range(file_count):
 with open("rom3d_metadata.json", "w", encoding="utf-8") as file:
     json.dump(files_metadata, file, ensure_ascii=False, indent="\t")
 
-print(f"Extracted {bmd_files} BMD files, {midi_files} MIDI files, {type_4_files} Type 4 files, {sbnk_swar_files} sound archive files, and {other_files} other files.")
+print(f"Extracted {bmd_files} BMD files, {midi_files} MIDI files, {type_4_files} Type 4 files, {sbnk_swar_files} sound archive files, {cmd_files} CMD files, and {other_files} other files.")
