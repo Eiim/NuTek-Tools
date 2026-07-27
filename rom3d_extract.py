@@ -62,7 +62,7 @@ for i in range(file_count):
             with open(subdir+filename, "wb") as outfile:
                 outfile.write(output_bytes)
             filetype_metadata = {
-                "hashes": [hex(h) for h in hashes],
+                "hashes": [f"{h:#010x}" for h in hashes],
                 "order": order
             }
             bmd_files += 1
@@ -91,7 +91,7 @@ for i in range(file_count):
                     outfile.write(output_bytes)
                 cmd_files += 1
             filetype_metadata = {
-                "hashes": [hex(h) for h in hashes],
+                "hashes": [f"{h:#010x}" for h in hashes],
                 "order": order
             }
         case 4:
@@ -106,12 +106,12 @@ for i in range(file_count):
                 entries_raw = iter_unpack("<LLLL", block[index:index+(16*entry_count)])
                 index += 16*entry_count
                 records.append({
-                    "id": hex(key),
+                    "id": f"{key:#010x}",
                     "entries": [{
-                        "type": hex(e[0]),
-                        "refA": hex(e[1]),
-                        "refB": hex(e[2]),
-                        "aux": hex(e[3])
+                        "type": f"{e[0]:#010x}",
+                        "refA": f"{e[1]:#010x}",
+                        "refB": f"{e[2]:#010x}",
+                        "aux": f"{e[3]:#010x}"
                     } for e in entries_raw]
                 })
             filename = str(block_ptr)+f".{filetype}.bin"
@@ -236,8 +236,8 @@ for i in range(file_count):
         "filetype": filetype,
         "type_high": type_high,
         "length": len(block),
-        "id": hex(var1s[i]),
-        "var4": hex(var4s[i]),
+        "id": f"{var1s[i]:#010x}",
+        "var4": f"{var4s[i]:#010x}",
         "filetype_metadata": filetype_metadata
     })
 
